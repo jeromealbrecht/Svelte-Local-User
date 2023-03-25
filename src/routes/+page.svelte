@@ -1,6 +1,11 @@
 <script>
+// import Form
 import Form from './form.svelte';
+
+// import UserSpace
 import UserSpace from './user/userSpace.svelte';
+
+// import browser
 import {
     browser
 } from "$app/environment";
@@ -8,66 +13,95 @@ import {
 // Importer le store
 import {
     get
-} from 'svelte/store'
+} from 'svelte/store';
+
 // import userAll pour le store
 import {
     userAll
 } from '../lib/stores.js';
-// import onMount
+
+// import onMount onDestroy
 import {
-    onMount
+    onMount,
+    onDestroy
 } from 'svelte';
 
 export const title = 'My SvelteKit App';
 
 /**
- * @type {string | null}
+ * @type {{ uid: string, name: string, mail: string } | null}
  */
-let user;
+let user = null;
 
-// let name = 'name';
 let isLoading = true;
 
+function getUserFromLocalStorage() {
+    const userJson = localStorage.getItem('userAll');
+    return userJson ? JSON.parse(userJson) : null;
+}
+
 /**
- * @param {any} value
+ * @param {{ uid: string, name: string, mail: string } | null} value
  */
 function setUser(value) {
-    // stocker l'utilisateur dans le stockage local
-    localStorage.setItem('userAll', value);
+    if (browser) {
+        if (value) {
+            localStorage.setItem('userAll', JSON.stringify(value));
+        } else {
+            localStorage.removeItem('userAll');
+        }
+    }
     user = value;
     isLoading = false;
 }
 
+function logout() {
+    setUser(null);
+    userAll.set(null); // Mettre à jour le store userAll
+}
+
+/**
+ * @type {import("svelte/store").Unsubscriber}
+ */
 let unsubscribe;
 
 onMount(() => {
-    // récupérer l'utilisateur stocké dans le store svelte
-    unsubscribe = userAll.subscribe(
-        (value) => {
-            setUser(value);
-        }
-    );
+    // Vérifie si le code s'exécute dans un navigateur (et non dans un environnement SSR)
+    if (browser) {
+        // Récupère l'utilisateur depuis le stockage local du navigateur
+        const localUser = getUserFromLocalStorage();
 
-    // récupérer l'utilisateur stocké dans le stockage local
-        console.log("local user", user);
-
-        // Vérifier si la valeur de "user" est déjà stockée dans localStorage
-        if (!localStorage.getItem('userAll') && !user) {
-            user = localStorage.getItem('userAll');
+        // Vérifie si un utilisateur a été trouvé dans le stockage local
+        if (localUser) {
+            // Met à jour la variable 'user' avec les informations de l'utilisateur récupérées
+            setUser(localUser);
+            
+            // Met à jour le store 'userAll' avec les informations de l'utilisateur récupérées
+            userAll.set(localUser);
         }
+        
+        // Indique que le chargement est terminé, permettant d'afficher le composant approprié
+        isLoading = false;
+    }
+
+    // S'abonner au store userAll
+    unsubscribe = userAll.subscribe((value) => {
+        setUser(value);
+    });
 });
 
-function logout() {
-    setUser(null);
-    if (browser) {
-        localStorage.removeItem('userAll');
+onDestroy(() => {
+    // Se désabonner du store userAll
+    if (unsubscribe) {
+        unsubscribe();
     }
-}
-
+});
 </script>
 
 <main>
-    {#if user}
+    {#if isLoading}
+    <p>Loading...</p>
+    {:else if user}
     <UserSpace name={user.name} />
     <button on:click={logout}>Logout</button>
     {:else}
